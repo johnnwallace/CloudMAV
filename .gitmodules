@@ -1,4 +1,4 @@
 [submodule "MonoNav-firmware"]
 	path = MonoNav-firmware
 	url = git@github.com:johnnwallace/MonoNav-firmware.git
-	branch = relative-yaw-traj
+	branch = wifi-deck
