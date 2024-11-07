@@ -1,42 +1,150 @@
 #include <Arduino.h>
-
-#include <cpx.h>
-
 #include <arduino_freertos.h>
-
 #include <queue.h>
 
-// Define queue lengths
+#include "cpx.h"
+
 #define TX_QUEUE_LENGTH 4
 #define RX_QUEUE_LENGTH 4
+#define UART_TRANSPORT_MTU 100
+#define CPX_ROUTING_PACKED_SIZE (sizeof(CPXRoutingPacked_t))
+
+char strBuf[100];
+
+typedef struct {
+    CPXRoutablePacket_t txp;
+} RouteContext_t;
 
 // Packet queues
-static QueueHandle_t txQueue;
-static QueueHandle_t rxQueue;
+static QueueHandle_t sourceQueue;
+static QueueHandle_t uartQueue;
 
 // Packets
+static CPXRoutablePacket_t rxBuf;
 static CPXRoutablePacket_t txp;
-static CPXRoutablePacket_t rxp;
+static RouteContext_t cf_task_context;
 
+static void splitAndSend(const CPXRoutablePacket_t* rxp, RouteContext_t* context, const uint16_t mtu) {
+    CPXRoutablePacket_t* txp = &context->txp;
 
-void setup() {
-    // Init queues
-    txQueue = xQueueCreate(TX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
-    rxQueue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
+    txp->route = rxp->route;
 
-    // Create a packet to send from the esp32 to the stm32 on the CF for CRTP
-    cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CRTP, &txp.route);
-    txp.data[0] = 0x06;
-    txp.dataLength = 1;
+    uint16_t remainingToSend = rxp->dataLength;
+    const uint8_t* startOfDataToSend = rxp->data;
+    while (remainingToSend > 0) {
+        uint16_t toSend = remainingToSend;
+        bool lastPacket = rxp->route.lastPacket;
+        if (toSend > mtu) {
+            toSend = mtu;
+            lastPacket = false;
+        }
 
-    // Send the packet
-    xQueueSend(txQueue, &txp, portMAX_DELAY);
+        memcpy(txp->data, startOfDataToSend, toSend);
+        txp->dataLength = toSend;
+        txp->route.lastPacket = lastPacket;
 
-    // Wait for a response
-    while (1) {
-        xQueueReceive(rxQueue, &rxp, portMAX_DELAY);
-        printf("Not handing system command 0x%X\n", rxp.data[0]);
+        if (txp->dataLength <= mtu) {
+            xQueueSend(uartQueue, txp, portMAX_DELAY);
+        } else {
+            Serial.println("Packet too big to send");
+        }
+
+        remainingToSend -= toSend;
+        startOfDataToSend += toSend;
     }
 }
 
-void loop() {}
+void route(CPXRoutablePacket_t* rxp, RouteContext_t* context, const char* routerName) {
+    while(1) {
+        // load packets from source queue
+        xQueueReceive(sourceQueue, rxp, portMAX_DELAY);
+        rxp->route.lastPacket = true;
+        
+        // check cpx version
+        // The version should already be checked when we receive packets. Do it again to make sure.
+        if(CPX_VERSION == rxp->route.version)
+        {
+            const CPXTarget_t source = rxp->route.source;
+            const CPXTarget_t destination = rxp->route.destination;
+            const uint16_t cpxDataLength = rxp->dataLength;
+
+            // call appropriate sender function based on packet destination using splitAndSend
+            switch (destination)
+            {
+                case CPX_T_GAP8:
+                    break;
+                case CPX_T_STM32:
+                    sprintf(strBuf, "ROUTER: %s [0x%02X] -> STM32 [0x%02X] (%u)", routerName, source, destination, cpxDataLength);
+                    Serial.println(strBuf);
+                    splitAndSend(rxp, &cf_task_context, UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
+                    break;
+                case CPX_T_ESP32:
+                    break;
+                case CPX_T_WIFI_HOST:
+                    break;
+                default:
+                    sprintf(strBuf, "ROUTER: Cannot route from %s [0x%02X] to [0x%02X]", routerName, source, destination);
+                    Serial.println(strBuf);
+            }
+        }
+    }
+}
+
+static void router_from_teensy(void*) {
+    route(&rxBuf, &cf_task_context, "TEENSY");
+}
+
+static void create_CRTP_packet(void*) {
+    while (1) {
+        // Create a packet to send from the esp32 to the stm32 on the CF for CRTP
+        cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CRTP, &txp.route);
+        txp.data[0] = 0x06;
+        txp.dataLength = 1;
+        
+        Serial.println("Creating CRTP packet");
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+static void task1(void*) {
+    pinMode(arduino::LED_BUILTIN, arduino::OUTPUT);
+    while (true) {
+        digitalWriteFast(arduino::LED_BUILTIN, arduino::LOW);
+        vTaskDelay(pdMS_TO_TICKS(500));
+
+        digitalWriteFast(arduino::LED_BUILTIN, arduino::HIGH);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+FLASHMEM __attribute__((noinline) )void setup() {
+    Serial.begin(9600);
+
+    delay(1000);
+    Serial.println("Starting deck test");
+
+    // Init queues
+    sourceQueue = xQueueCreate(TX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
+    uartQueue = xQueueCreate(TX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
+
+    // Init router task
+    xTaskCreate(router_from_teensy, "Router from Teensy", 5000, NULL, 1, NULL);
+
+    // Init packet creation task
+    xTaskCreate(create_CRTP_packet, "Create CRTP packet", 5000, NULL, 1, NULL);
+
+    xTaskCreate(task1, "task1", 128, nullptr, 2, nullptr);
+
+    // // Send the packet
+    // xQueueSend(txQueue, &txp, portMAX_DELAY);
+
+    // // Wait for a response
+    // while (1) {
+    //     xQueueReceive(rxQueue, &rxp, portMAX_DELAY);
+    //     printf("Not handing system command 0x%X\n", rxp.data[0]);
+    // }
+    vTaskStartScheduler();
+}
+
+void loop() {
+}
