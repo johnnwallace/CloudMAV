@@ -59,7 +59,7 @@ void route(CPXRoutablePacket_t* rxp, RouteContext_t* context, const char* router
         // load packets from source queue
         xQueueReceive(sourceQueue, rxp, portMAX_DELAY);
         rxp->route.lastPacket = true;
-        
+        Serial.println("routing...");
         // check cpx version
         // The version should already be checked when we receive packets. Do it again to make sure.
         if(CPX_VERSION == rxp->route.version)
@@ -100,6 +100,9 @@ static void create_CRTP_packet(void*) {
         cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CRTP, &txp.route);
         txp.data[0] = 0x06;
         txp.dataLength = 1;
+
+        // send packet
+        xQueueSend(sourceQueue, &txp, portMAX_DELAY);
         
         Serial.println("Creating CRTP packet");
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -117,7 +120,7 @@ static void task1(void*) {
     }
 }
 
-FLASHMEM __attribute__((noinline) )void setup() {
+FLASHMEM __attribute__((noinline))void setup() {
     Serial.begin(9600);
 
     delay(1000);
