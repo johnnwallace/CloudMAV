@@ -11,22 +11,16 @@
 
 char strBuf[100];
 
-typedef struct {
-    CPXRoutablePacket_t txp;
-} RouteContext_t;
-
 // Packet queues
 static QueueHandle_t sourceQueue;
 static QueueHandle_t uartQueue;
 
 // Packets
-static CPXRoutablePacket_t rxBuf;
 static CPXRoutablePacket_t txp;
-static RouteContext_t cf_task_context;
+static CPXRoutablePacket_t routingRxBuf;
+static CPXRoutablePacket_t routingTxBuf;
 
-static void splitAndSend(const CPXRoutablePacket_t* rxp, RouteContext_t* context, const uint16_t mtu) {
-    CPXRoutablePacket_t* txp = &context->txp;
-
+static void splitAndSend(const CPXRoutablePacket_t* rxp, CPXRoutablePacket_t* txp, const uint16_t mtu) {
     txp->route = rxp->route;
 
     uint16_t remainingToSend = rxp->dataLength;
@@ -54,7 +48,7 @@ static void splitAndSend(const CPXRoutablePacket_t* rxp, RouteContext_t* context
     }
 }
 
-void route(CPXRoutablePacket_t* rxp, RouteContext_t* context, const char* routerName) {
+void route(CPXRoutablePacket_t* rxp, CPXRoutablePacket_t* txp, const char* routerName) {
     while(1) {
         // load packets from source queue
         xQueueReceive(sourceQueue, rxp, portMAX_DELAY);
@@ -76,7 +70,7 @@ void route(CPXRoutablePacket_t* rxp, RouteContext_t* context, const char* router
                 case CPX_T_STM32:
                     sprintf(strBuf, "ROUTER: %s [0x%02X] -> STM32 [0x%02X] (%u)", routerName, source, destination, cpxDataLength);
                     Serial.println(strBuf);
-                    splitAndSend(rxp, &cf_task_context, UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
+                    splitAndSend(rxp, txp, UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
                     break;
                 case CPX_T_ESP32:
                     break;
@@ -91,7 +85,7 @@ void route(CPXRoutablePacket_t* rxp, RouteContext_t* context, const char* router
 }
 
 static void router_from_teensy(void*) {
-    route(&rxBuf, &cf_task_context, "TEENSY");
+    route(&routingRxBuf, &routingTxBuf, "TEENSY");
 }
 
 static void create_CRTP_packet(void*) {
@@ -109,7 +103,7 @@ static void create_CRTP_packet(void*) {
     }
 }
 
-static void task1(void*) {
+static void blink(void*) {
     pinMode(arduino::LED_BUILTIN, arduino::OUTPUT);
     while (true) {
         digitalWriteFast(arduino::LED_BUILTIN, arduino::LOW);
@@ -136,16 +130,8 @@ FLASHMEM __attribute__((noinline))void setup() {
     // Init packet creation task
     xTaskCreate(create_CRTP_packet, "Create CRTP packet", 5000, NULL, 1, NULL);
 
-    xTaskCreate(task1, "task1", 128, nullptr, 2, nullptr);
+    xTaskCreate(blink, "Blink", 128, nullptr, 2, nullptr);
 
-    // // Send the packet
-    // xQueueSend(txQueue, &txp, portMAX_DELAY);
-
-    // // Wait for a response
-    // while (1) {
-    //     xQueueReceive(rxQueue, &rxp, portMAX_DELAY);
-    //     printf("Not handing system command 0x%X\n", rxp.data[0]);
-    // }
     vTaskStartScheduler();
 }
 

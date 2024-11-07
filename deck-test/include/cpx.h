@@ -72,7 +72,6 @@ typedef struct {
 // The maximum MTU of any link
 #define CPX_MAX_PAYLOAD_SIZE 1022
 
-
 typedef struct {
   CPXRouting_t route;
 
