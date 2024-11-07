@@ -1,7 +1,7 @@
 #include "cpx.h"
 // #include "freertos/FreeRTOS.h"
 
-// Seems to create a routing struct
+// Create a routing struct
 void cpxInitRoute(const CPXTarget_t source, const CPXTarget_t destination, const CPXFunction_t function, CPXRouting_t* route) {
     route->source = source;
     route->destination = destination;
