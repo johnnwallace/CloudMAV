@@ -1,8 +1,8 @@
 #include "esp_transport.h"
 
-static QueueHandle_t sourceQueue;
-
 #define RX_QUEUE_LENGTH 4
+
+static QueueHandle_t sourceQueue;
 
 static CPXRoutablePacket_t txp;
 
@@ -13,10 +13,16 @@ void espTransportReceive(CPXRoutablePacket_t* packet) {
 
 static void simulate_crtp_packets(void*) {
     while (1) {
+        // Create a crtp packet
+        CRTPPacket packet;
+        packet.header = CRTP_HEADER(15, 0);
+        packet.size = 1;
+        packet.data[0] = 0x06;
+
         // Create a packet to send from the esp32 to the stm32 on the CF for CRTP
         cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CRTP, &txp.route);
-        txp.data[0] = 0x06;
-        txp.dataLength = 1;
+        memcpy(txp.data, &packet, sizeof(CRTPPacket));
+        txp.dataLength = sizeof(CRTPPacket);
 
         // send packet
         xQueueSend(sourceQueue, &txp, portMAX_DELAY);

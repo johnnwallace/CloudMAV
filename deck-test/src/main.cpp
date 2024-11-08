@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <arduino_freertos.h>
 #include <queue.h>
 
