@@ -5,7 +5,7 @@
 char strBuf[100];
 
 typedef void (*Receiver_t)(CPXRoutablePacket_t* packet);
-typedef void (*Sender_t)(const CPXRoutablePacket_t* packet);
+typedef void (*Sender_t)(const CPXRoutablePacket_t* packet, char* strBuf);
 
 static CPXRoutablePacket_t routingRxBuf;
 static CPXRoutablePacket_t routingTxBuf;
@@ -26,7 +26,7 @@ static void splitAndSend(const CPXRoutablePacket_t* rxp, CPXRoutablePacket_t* tx
         memcpy(txp->data, startOfDataToSend, toSend);
         txp->dataLength = toSend;
         txp->route.lastPacket = lastPacket;
-        sender(txp);
+        sender(txp, strBuf);
 
         remainingToSend -= toSend;
         startOfDataToSend += toSend;
@@ -56,6 +56,7 @@ static void route(Receiver_t receive, CPXRoutablePacket_t* rxp, CPXRoutablePacke
                     sprintf(strBuf, "ROUTER: %s [0x%02X] -> STM32 [0x%02X] (%u)", routerName, source, destination, cpxDataLength);
                     Serial.println(strBuf);
                     splitAndSend(rxp, txp, uart_transport_send, UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
+                    Serial.println(strBuf);
                     break;
                 case CPX_T_ESP32:
                     break;

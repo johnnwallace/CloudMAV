@@ -201,51 +201,73 @@ static void uart_rx_task(void *_param)
     }
 }
 
+static void simple_uart_tx_task(void *_param)
+{
+    while (1) {
+        if (uxQueueMessagesWaiting(tx_queue) > 0)
+        {
+            // Dequeue and wait for either CTS or CTR
+            xQueueReceive(tx_queue, &qPacket, 0);
+            txp.start = 0xFF;
+            txp.payloadLength = qPacket.dataLength + CPX_ROUTING_PACKED_SIZE;
+            cpxRouteToPacked(&qPacket.route, &txp.routablePayload.route);
+            memcpy(txp.routablePayload.data, qPacket.data, txp.payloadLength);
+            txp.payload[txp.payloadLength] = calcCrc(&txp);
+            HWSERIAL.write((const uint8_t *)&txp, txp.payloadLength + UART_META_LENGTH);
+            Serial.println("UART packet sent.");
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+}
+
 void uartTransportInit()
 {
-    // Setting up synchronization items
+    // // Setting up synchronization items
     tx_queue = xQueueCreate(TX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
-    rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(uart_transport_packet_t));
+    // rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(uart_transport_packet_t));
 
-    evGroup = xEventGroupCreate();
+    // evGroup = xEventGroupCreate();
 
-    // Init hardware serial
+    // // Init hardware serial
     HWSERIAL.begin(57600, SERIAL_8N1);
     HWSERIAL.addMemoryForRead(uart_rx_buf, UART_TRANSPORT_MTU * 2);
     HWSERIAL.addMemoryForWrite(uart_tx_buf, UART_TRANSPORT_MTU * 2);
 
-    // Launching communication tasks
-    startUpEventGroup = xEventGroupCreate();
-    xEventGroupClearBits(startUpEventGroup, START_UP_RX_RUNNING | START_UP_TX_RUNNING);
-    xTaskCreate(uart_rx_task, "UART RX transport", 5000, NULL, 1, NULL);
-    xEventGroupWaitBits(startUpEventGroup,
-                        START_UP_RX_RUNNING,
-                        pdTRUE, // Clear bits before returning
-                        pdTRUE, // Wait for all bits
-                        portMAX_DELAY);
+    // // Launching communication tasks
+    // startUpEventGroup = xEventGroupCreate();
+    // xEventGroupClearBits(startUpEventGroup, START_UP_RX_RUNNING | START_UP_TX_RUNNING);
+    // xTaskCreate(uart_rx_task, "UART RX transport", 5000, NULL, 1, NULL);
+    // xEventGroupWaitBits(startUpEventGroup,
+    //                     START_UP_RX_RUNNING,
+    //                     pdTRUE, // Clear bits before returning
+    //                     pdTRUE, // Wait for all bits
+    //                     portMAX_DELAY);
 
-    // We need to hold off here to make sure that the RX task
-    // has started up and is waiting for chars before he TX task is started, otherwise we might send
-    // CTR and miss CTS (which means that the STM32 will stop sending CTS
-    // too early and we cannot sync)
+    // // We need to hold off here to make sure that the RX task
+    // // has started up and is waiting for chars before he TX task is started, otherwise we might send
+    // // CTR and miss CTS (which means that the STM32 will stop sending CTS
+    // // too early and we cannot sync)
 
-    xTaskCreate(uart_tx_task, "UART TX transport", 5000, NULL, 1, NULL);
-    xEventGroupWaitBits(startUpEventGroup,
-                        START_UP_TX_RUNNING,
-                        pdTRUE, // Clear bits before returning
-                        pdTRUE, // Wait for all bits
-                        portMAX_DELAY);
+    // xTaskCreate(uart_tx_task, "UART TX transport", 5000, NULL, 1, NULL);
+    // xEventGroupWaitBits(startUpEventGroup,
+    //                     START_UP_TX_RUNNING,
+    //                     pdTRUE, // Clear bits before returning
+    //                     pdTRUE, // Wait for all bits
+    //                     portMAX_DELAY);
+
+    xTaskCreate(simple_uart_tx_task, "Simple UART RX transport", 5000, NULL, 1, NULL);
 
     Serial.println("UART transport initialized!");
 }
 
-void uart_transport_send(const CPXRoutablePacket_t *packet)
+void uart_transport_send(const CPXRoutablePacket_t *packet, char* strBuf)
 {
     assert(packet->dataLength <= UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
 
     xQueueSend(tx_queue, packet, portMAX_DELAY);
+    sprintf(strBuf, "UART tx queue size: %u", uxQueueMessagesWaiting(tx_queue));
 
-    xEventGroupSetBits(evGroup, TXQ_EVENT);
+    // xEventGroupSetBits(evGroup, TXQ_EVENT);
 }
 
 void uart_transport_receive(CPXRoutablePacket_t *packet)
