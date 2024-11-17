@@ -34,11 +34,10 @@ static void simulate_crtp_packets(void*) {
 static void cpx_to_console(void*) {
     while (1) {
         cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CONSOLE, &txp.route);
-        memcpy(txp.data, (uint8_t*)"Hello", 5);
+        memcpy(txp.data, (uint8_t*)"Hello\n", 6);
         txp.dataLength = 5;
 
         // send packet
-        Serial.println("Sending packet to queue");
         xQueueSend(sourceQueue, &txp, portMAX_DELAY);
         
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -48,7 +47,7 @@ static void cpx_to_console(void*) {
 void espTransportInit(void*) {
     sourceQueue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
 
-    // xTaskCreate(cpx_to_console, "Create CRTP packet", 5000, NULL, 1, NULL);
+    xTaskCreate(cpx_to_console, "Create CRTP packet", 5000, NULL, 1, NULL);
 
     Serial.println("ESP transport initialized!");
 

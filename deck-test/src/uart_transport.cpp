@@ -155,7 +155,7 @@ static void uart_tx_task(void *_param)
                 }
             } while ((evBits & CTS_EVENT) != CTS_EVENT);
             HWSERIAL.write((const uint8_t *)&txp, txp.payloadLength + UART_META_LENGTH);
-            Serial.println("UART packet sent.");
+            Serial.println("Packet sent.");
         }
     }
 }
@@ -174,24 +174,18 @@ static void uart_rx_task(void *_param)
             rxp.start = HWSERIAL.read();
         } while (rxp.start != 0xFF);
 
-        Serial.println("Start byte received.");
-
         while(!HWSERIAL.available()) {
             vTaskDelay(1);
-            Serial.println("Waiting for payload length.");
         } // necessary?
         rxp.payloadLength = HWSERIAL.read();
-        Serial.print("Payload length: ");
-        Serial.println(rxp.payloadLength);
 
         if (rxp.payloadLength == 0)
         {
-            Serial.println("Empty packet received.");
+            Serial.println("Clear to send.");
             xEventGroupSetBits(evGroup, CTS_EVENT);
         }
         else
         {
-            Serial.println("Nonempty packet received.");
             while(!HWSERIAL.available()) { vTaskDelay(1); } // necessary?
             HWSERIAL.readBytes(rxp.payload, rxp.payloadLength + UART_CRC_LENGTH);
             assert(rxp.payload[rxp.payloadLength] == calcCrc(&rxp));
