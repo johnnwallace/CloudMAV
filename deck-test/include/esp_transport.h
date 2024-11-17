@@ -34,4 +34,4 @@ typedef struct _CRTPPacket
 } __attribute__((packed)) CRTPPacket;
 
 void espTransportReceive(CPXRoutablePacket_t* packet);
-void espTransportInit();
+void espTransportInit(void*);

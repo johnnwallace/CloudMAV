@@ -8,4 +8,4 @@
 #include "uart_transport.h"
 #include "event_groups.h"
 
-void router_init();
+void router_init(void*);
