@@ -35,7 +35,7 @@ static void cpx_to_console(void*) {
     while (1) {
         cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CONSOLE, &txp.route);
         memcpy(txp.data, (uint8_t*)"Hello\n", 6);
-        txp.dataLength = 5;
+        txp.dataLength = 6;
 
         // send packet
         xQueueSend(sourceQueue, &txp, portMAX_DELAY);
