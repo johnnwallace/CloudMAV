@@ -4,13 +4,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-#include "freertos/event_groups.h"
-
 #include "esp_log.h"
-
-#include "cpx.h"
-#include "uart_transport.h"
-#include "mcu_transport.h"
 
 #define CPX_ROUTING_PACKED_SIZE (sizeof(CPXRoutingPacked_t))
 
@@ -68,6 +62,7 @@ static void route(Receiver_t receive, CPXRoutablePacket_t* rxp, CPXRoutablePacke
                 case CPX_T_GAP8:
                     break;
                 case CPX_T_STM32:
+                    ESP_LOGD("ROUTER", "%s [0x%02X] -> STM32 [0x%02X] (%u)", routerName, source, destination, cpxDataLength);
                     splitAndSend(rxp, txp, uart_transport_send, UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
                     break;
                 case CPX_T_ESP32:
@@ -75,7 +70,7 @@ static void route(Receiver_t receive, CPXRoutablePacket_t* rxp, CPXRoutablePacke
                 case CPX_T_WIFI_HOST:
                     break;
                 default:
-                    ESP_LOGI("ROUTER", "Cannot route from %s [0x%02X] to [0x%02X]", routerName, source, destination);
+                    ESP_LOGW("ROUTER", "Cannot route from %s [0x%02X] to [0x%02X]", routerName, source, destination);
             }
         }
     }
@@ -89,6 +84,7 @@ static void router_from_teensy(void*) {
 void router_init(void*) {
     startUpEventGroup = xEventGroupCreate();
 
+    ESP_LOGI("ROUTER", "Waiting for tasks to start");
     xTaskCreate(router_from_teensy, "Router from Teensy", 5000, NULL, 1, NULL);
     xEventGroupWaitBits(startUpEventGroup,
                         START_UP_TEENSY_ROUTER_RUNNING,
@@ -96,7 +92,7 @@ void router_init(void*) {
                         pdTRUE, // Wait for all bits
                         portMAX_DELAY);
 
-    ESP_LOGI("ROUTER", "Router initialized!");
+    ESP_LOGI("ROUTER", "Initialized");
 
     vTaskDelete(NULL);
 }

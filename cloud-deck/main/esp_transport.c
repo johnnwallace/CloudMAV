@@ -1,13 +1,10 @@
-#include "mcu_transport.h"
+#include "esp_transport.h"
 
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-
 #include "esp_log.h"
-
-#include "cpx.h"
 
 #define RX_QUEUE_LENGTH 4
 
@@ -54,6 +51,8 @@ static void cpx_to_console(void*) {
 }
 
 void espTransportInit(void*) {
+    ESP_LOGI("ESP", "Starting ESP transport.");
+    
     sourceQueue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
 
     xTaskCreate(cpx_to_console, "Create CRTP packet", 5000, NULL, 1, NULL);
