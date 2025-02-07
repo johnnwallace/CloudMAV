@@ -8,34 +8,10 @@
 
 #define RX_QUEUE_LENGTH 4
 
-static QueueHandle_t sourceQueue;
+static QueueHandle_t espTxQueue;
+static QueueHandle_t espRxQueue;
 
 static CPXRoutablePacket_t txp;
-
-void espTransportReceive(CPXRoutablePacket_t* packet) {
-    xQueueReceive(sourceQueue, packet, portMAX_DELAY);
-    packet->route.lastPacket = true;
-}
-
-static void simulate_crtp_packets(void*) {
-    while (1) {
-        // Create a crtp packet
-        CRTPPacket packet;
-        packet.header = CRTP_HEADER(15, 0);
-        packet.size = 1;
-        packet.data[0] = 0x06;
-
-        // Create a packet to send from the esp32 to the stm32 on the CF for CRTP
-        cpxInitRoute(CPX_T_ESP32, CPX_T_STM32, CPX_F_CRTP, &txp.route);
-        memcpy(txp.data, &packet, sizeof(CRTPPacket));
-        txp.dataLength = sizeof(CRTPPacket);
-
-        // send packet
-        xQueueSend(sourceQueue, &txp, portMAX_DELAY);
-        
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-}
 
 static void cpx_to_console(void*) {
     while (1) {
@@ -44,18 +20,37 @@ static void cpx_to_console(void*) {
         txp.dataLength = 6;
 
         // send packet
-        xQueueSend(sourceQueue, &txp, portMAX_DELAY);
+        xQueueSend(espTxQueue, &txp, portMAX_DELAY);
         
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
+void espAppSendToRouterBlocking(const CPXRoutablePacket_t* packet) {
+    xQueueSend(espTxQueue, packet, portMAX_DELAY);
+}
+
+void espAppReceiveFromRouter(CPXRoutablePacket_t* packet) {
+    CPXRoutablePacket_t* buf = packet;
+    xQueueReceive(espRxQueue, buf, portMAX_DELAY);
+}
+
+void espTransportSend(const CPXRoutablePacket_t* packet) {
+    assert(packet->dataLength <= ESP_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
+    xQueueSend(espRxQueue, packet, portMAX_DELAY);
+}
+
+void espTransportReceive(CPXRoutablePacket_t* packet) {
+    xQueueReceive(espTxQueue, packet, portMAX_DELAY);
+    packet->route.lastPacket = true;
+}
+
 void espTransportInit(void*) {
     ESP_LOGI("ESP", "Starting ESP transport.");
     
-    sourceQueue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
+    espTxQueue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(CPXRoutablePacket_t));
 
-    xTaskCreate(cpx_to_console, "Create CRTP packet", 5000, NULL, 1, NULL);
+    // xTaskCreate(cpx_to_console, "Create CRTP packet", 5000, NULL, 1, NULL);
 
     ESP_LOGI("ESP", "ESP transport initialized!");
 

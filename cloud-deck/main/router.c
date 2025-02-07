@@ -3,8 +3,14 @@
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 #include "freertos/queue.h"
+
 #include "esp_log.h"
+
+#include "cpx.h"
+#include "esp_transport.h"
+#include "uart_transport.h"
 
 #define CPX_ROUTING_PACKED_SIZE (sizeof(CPXRoutingPacked_t))
 
@@ -84,7 +90,7 @@ static void router_from_teensy(void*) {
 void router_init(void*) {
     startUpEventGroup = xEventGroupCreate();
 
-    ESP_LOGI("ROUTER", "Waiting for tasks to start");
+    ESP_LOGI("ROUTER", "Waiting to start");
     xTaskCreate(router_from_teensy, "Router from Teensy", 5000, NULL, 1, NULL);
     xEventGroupWaitBits(startUpEventGroup,
                         START_UP_TEENSY_ROUTER_RUNNING,
