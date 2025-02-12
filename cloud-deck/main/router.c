@@ -11,6 +11,7 @@
 #include "cpx.h"
 #include "esp_transport.h"
 #include "uart_transport.h"
+#include "server.h"
 
 #define CPX_ROUTING_PACKED_SIZE (sizeof(CPXRoutingPacked_t))
 
@@ -25,6 +26,7 @@ static CPXRoutablePacket_t routingTxBuf;
 static EventGroupHandle_t startUpEventGroup;
 
 static const int START_UP_TEENSY_ROUTER_RUNNING = ( 1 << 0 );
+static const int START_UP_SERVER_ROUTER_RUNNING = ( 1 << 1 );
 
 static void splitAndSend(const CPXRoutablePacket_t* rxp, CPXRoutablePacket_t* txp, Sender_t sender, const uint16_t mtu) {
     txp->route = rxp->route;
@@ -66,7 +68,7 @@ static void route(Receiver_t receive, CPXRoutablePacket_t* rxp, CPXRoutablePacke
             switch (destination)
             {
                 case CPX_T_GAP8:
-                    break;
+                break;
                 case CPX_T_STM32:
                     ESP_LOGD("ROUTER", "%s [0x%02X] -> STM32 [0x%02X] (%u)", routerName, source, destination, cpxDataLength);
                     splitAndSend(rxp, txp, uart_transport_send, UART_TRANSPORT_MTU - CPX_ROUTING_PACKED_SIZE);
@@ -87,6 +89,11 @@ static void router_from_teensy(void*) {
     route(espTransportReceive, &routingRxBuf, &routingTxBuf, "TEENSY");
 }
 
+static void router_from_server(void*) {
+    xEventGroupSetBits(startUpEventGroup, START_UP_SERVER_ROUTER_RUNNING);
+    route(serverTransportReceive, &routingRxBuf, &routingTxBuf, "SERVER");
+}
+
 void router_init(void*) {
     startUpEventGroup = xEventGroupCreate();
 
@@ -94,6 +101,13 @@ void router_init(void*) {
     xTaskCreate(router_from_teensy, "Router from Teensy", 5000, NULL, 1, NULL);
     xEventGroupWaitBits(startUpEventGroup,
                         START_UP_TEENSY_ROUTER_RUNNING,
+                        pdTRUE, // Clear bits before returning
+                        pdTRUE, // Wait for all bits
+                        portMAX_DELAY);
+
+    xTaskCreate(router_from_server, "Router from Server", 5000, NULL, 1, NULL);
+    xEventGroupWaitBits(startUpEventGroup,
+                        START_UP_SERVER_ROUTER_RUNNING,
                         pdTRUE, // Clear bits before returning
                         pdTRUE, // Wait for all bits
                         portMAX_DELAY);
