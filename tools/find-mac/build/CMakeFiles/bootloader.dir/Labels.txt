@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/CMakeFiles/bootloader
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/CMakeFiles/bootloader.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/CMakeFiles/bootloader-complete.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/Users/jowallace/Dev/CloudMAV/tools/find-mac/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
