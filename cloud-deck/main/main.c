@@ -37,7 +37,7 @@ void app_main(void)
 
     xTaskCreate(uart_transport_init, "UART transport init", 8192, NULL, 2, NULL);
     xTaskCreate(espTransportInit, "ESP transport init", 8192, NULL, 2, NULL);
-    xTaskCreate(router_init, "Router init", 8192, NULL, 2, NULL);
     xTaskCreate(wifi_init, "Router init", 8192, NULL, 2, NULL);
     xTaskCreate(init_webserver, "Server init", 8192, NULL, 2, NULL);
+    xTaskCreate(router_init, "Router init", 8192, NULL, 2, NULL);
 }

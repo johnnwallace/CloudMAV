@@ -110,7 +110,7 @@ static void uart_tx_task(void* _param) {
 
   do {
     uart_write_bytes(UART_NUM_0, &ctr, sizeof(ctr));
-    vTaskDelay(10);
+    vTaskDelay(100);
     evBits = xEventGroupGetBits(evGroup);
   } while ((evBits & CTS_EVENT) != CTS_EVENT);
 
@@ -198,7 +198,7 @@ void uart_transport_init() {
     evGroup = xEventGroupCreate();
 
     const uart_config_t uart_config = {
-        .baud_rate = 57600,
+        .baud_rate = 576000,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -209,6 +209,7 @@ void uart_transport_init() {
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, UART_TRANSPORT_MTU * 2, UART_TRANSPORT_MTU * 2, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART_NUM_0, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_0, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(gpio_set_pull_mode(RXD_PIN, GPIO_FLOATING));
 
     // Launching communication tasks
     startUpEventGroup = xEventGroupCreate();
