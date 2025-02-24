@@ -32,6 +32,7 @@ void app_main(void)
     esp_log_level_set("TEST", ESP_LOG_INFO);
     esp_log_level_set("WIFI", ESP_LOG_INFO);
     esp_log_level_set("SERVER", ESP_LOG_INFO);
+    esp_log_level_set("ESP", ESP_LOG_INFO);
 
     ESP_LOGI("SYS", "\n\n -- Starting up --\n");
 
