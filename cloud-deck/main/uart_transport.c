@@ -118,14 +118,14 @@ static void uart_tx_task(void* _param) {
     // If we have nothing to send then wait, either for something to be
     // queued or for a request to send CTR
     if (uxQueueMessagesWaiting(tx_queue) == 0) {
-      ESP_LOGI("UART", "Waiting for CTR/TXQ");
+      // ESP_LOGI("UART", "Waiting for CTR/TXQ");
       evBits = xEventGroupWaitBits(evGroup,
                                 CTR_EVENT | TXQ_EVENT,
                                 pdTRUE, // Clear bits before returning
                                 pdFALSE, // Wait for any bit
                                 portMAX_DELAY);
       if ((evBits & CTR_EVENT) == CTR_EVENT) {
-        ESP_LOGI("UART", "Sent CTR");
+        // ESP_LOGI("UART", "Sent CTR");
         uart_write_bytes(UART_NUM_0, &ctr, sizeof(ctr));
       }
     }
@@ -140,18 +140,19 @@ static void uart_tx_task(void* _param) {
       txp.payload[txp.payloadLength] = calcCrc(&txp);
 
       do {
-        ESP_LOGI("UART", "Waiting for CTR/CTS");
+        // ESP_LOGI("UART", "Waiting for CTR/CTS");
         evBits = xEventGroupWaitBits(evGroup,
                                 CTR_EVENT | CTS_EVENT,
                                 pdTRUE, // Clear bits before returning
                                 pdFALSE, // Wait for any bit
                                 portMAX_DELAY);
         if ((evBits & CTR_EVENT) == CTR_EVENT) {
-          ESP_LOGI("UART", "Sent CTR");
+          // ESP_LOGI("UART", "Sent CTR");
           uart_write_bytes(UART_NUM_0, &ctr, sizeof(ctr));
         }
       } while ((evBits & CTS_EVENT) != CTS_EVENT);
       ESP_LOGI("UART", "Sending packet");
+      ESP_LOG_BUFFER_HEX("UART", &txp, txp.payloadLength + UART_META_LENGTH);
       uart_write_bytes(UART_NUM_0, &txp, txp.payloadLength + UART_META_LENGTH);
     }
   }
@@ -163,20 +164,20 @@ static void uart_rx_task(void* _param) {
 
   while(1) {
     do {
-      ESP_LOGI("UART", "Waiting for start byte.");
+      // ESP_LOGI("UART", "Waiting for start byte.");
       uart_read_bytes(UART_NUM_0, &rxp.start, 1, portMAX_DELAY);
     } while (rxp.start != 0xFF);
 
     uart_read_bytes(UART_NUM_0, &rxp.payloadLength, 1, portMAX_DELAY);
 
     if (rxp.payloadLength == 0) {
-      ESP_LOGI("UART", "Received CTS");
+      // ESP_LOGI("UART", "Received CTS");
       xEventGroupSetBits(evGroup, CTS_EVENT);
     } else {
       uart_read_bytes(UART_NUM_0, rxp.payload, rxp.payloadLength + UART_CRC_LENGTH, portMAX_DELAY);
       assert (rxp.payload[rxp.payloadLength] == calcCrc(&rxp));
 
-      ESP_LOGI("UART", "Received packet");
+      // ESP_LOGI("UART", "Received packet");
       // Post on RX queue and send flow control
       // Optimize a bit here
       if (uxQueueSpacesAvailable(rx_queue) > 0) {

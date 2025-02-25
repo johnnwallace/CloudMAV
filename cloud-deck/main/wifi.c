@@ -338,11 +338,11 @@ static void wifi_receiving_task(void *pvParameters) {
   while (1) {
     len = recv(conn, &rxp_wifi, 2, 0);
     if (len > 0) {
-      ESP_LOGD(TAG, "Wire data length %i", rxp_wifi.payloadLength);
+      ESP_LOGI(TAG, "Wire data length %i", rxp_wifi.payloadLength);
       int totalRxLen = 0;
       do {
         len = recv(conn, &rxp_wifi.payload[totalRxLen], rxp_wifi.payloadLength - totalRxLen, 0);
-        ESP_LOGD(TAG, "Read %i bytes", len);
+        // ESP_LOGI(TAG, "Read %i bytes", len);
         totalRxLen += len;
       } while (totalRxLen < rxp_wifi.payloadLength);
       ESP_LOG_BUFFER_HEX_LEVEL(TAG, &rxp_wifi, 10, ESP_LOG_DEBUG);
