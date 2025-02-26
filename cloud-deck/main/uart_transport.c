@@ -140,7 +140,7 @@ static void uart_tx_task(void* _param) {
       txp.payload[txp.payloadLength] = calcCrc(&txp);
 
       do {
-        // ESP_LOGI("UART", "Waiting for CTR/CTS");
+        ESP_LOGI("UART", "Waiting for CTR/CTS");
         evBits = xEventGroupWaitBits(evGroup,
                                 CTR_EVENT | CTS_EVENT,
                                 pdTRUE, // Clear bits before returning
@@ -171,7 +171,7 @@ static void uart_rx_task(void* _param) {
     uart_read_bytes(UART_NUM_0, &rxp.payloadLength, 1, portMAX_DELAY);
 
     if (rxp.payloadLength == 0) {
-      // ESP_LOGI("UART", "Received CTS");
+      ESP_LOGI("UART", "Received CTS");
       xEventGroupSetBits(evGroup, CTS_EVENT);
     } else {
       uart_read_bytes(UART_NUM_0, rxp.payload, rxp.payloadLength + UART_CRC_LENGTH, portMAX_DELAY);

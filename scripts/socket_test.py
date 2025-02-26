@@ -1,3 +1,5 @@
+import time
+
 from cflib.cpx.transports import SocketTransport
 from cflib.cpx import CPX, CPXPacket, CPXTarget, CPXFunction
 
@@ -8,6 +10,10 @@ def main():
     cpx = CPX(SocketTransport(host, port))
     packet = CPXPacket(function=CPXFunction.CONSOLE, destination=CPXTarget.STM32, data=b"Hello\n\0")
     # packet.lastPacket = True
+    cpx.sendPacket(packet)
+    time.sleep(1)
+    cpx.sendPacket(packet)
+    time.sleep(1)
     cpx.sendPacket(packet)
 
 if __name__ == "__main__":
