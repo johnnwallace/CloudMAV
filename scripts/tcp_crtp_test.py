@@ -13,22 +13,17 @@ driver = TcpDriver()
 driver.connect(URI, None, None)
 
 packet = CRTPPacket()
-packet.set_header(CRTPPort.LINKCTRL, 3)
+packet.set_header(CRTPPort.LINKCTRL, 0)
 # packet.data = b"Hello\n\0"
 
 # while True:
 driver.send_packet(packet)
-print("Sending packet...")
-time.sleep(1)
-driver.send_packet(packet)
-print("Sending packet...")
-time.sleep(1)
-driver.send_packet(packet)
-print("Sending packet...")
+print("Sending packet..")
 
-# driver.close()
-
-# cpx = CPX(SocketTransport(host, port))
-# packet = CPXPacket(function=CPXFunction.CONSOLE, destination=CPXTarget.STM32, data=b"Hello\n\0")
-# # packet.lastPacket = True
-# cpx.sendPacket(packet)
+time.sleep(1)
+received = driver.receive_packet()
+while received:
+    print(received)
+    time.sleep(0.1)
+    received = driver.receive_packet()
+driver.close()

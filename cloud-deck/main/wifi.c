@@ -224,6 +224,15 @@ void wifi_bind_socket() {
   }
   ESP_LOGD(TAG, "Socket created");
 
+  int keepalive = 1;
+  int keepidle = 5;
+  int keepintvl = 5;
+  int keepcnt = 3;
+  setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+  setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+  setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+  setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+
   int err = bind(sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
   if (err != 0) {
     ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
@@ -336,14 +345,18 @@ static void wifi_receiving_task(void *pvParameters) {
 
   xEventGroupSetBits(startUpEventGroup, START_UP_RX_TASK);
   while (1) {
+    ESP_LOGI(TAG, "Waiting for data");
+
     len = recv(conn, &rxp_wifi, 2, 0);
+    ESP_LOGI(TAG, "Start byte read.");
     if (len > 0) {
       ESP_LOGI(TAG, "Wire data length %i", rxp_wifi.payloadLength);
       int totalRxLen = 0;
       do {
+        ESP_LOGI(TAG, "Reading b");
         len = recv(conn, &rxp_wifi.payload[totalRxLen], rxp_wifi.payloadLength - totalRxLen, 0);
-        // ESP_LOGI(TAG, "Read %i bytes", len);
         totalRxLen += len;
+        ESP_LOGI(TAG, "Read %i bytes", len);
       } while (totalRxLen < rxp_wifi.payloadLength);
       ESP_LOG_BUFFER_HEX_LEVEL(TAG, &rxp_wifi, 10, ESP_LOG_DEBUG);
       xQueueSend(wifiRxQueue, &rxp_wifi, portMAX_DELAY);
@@ -352,6 +365,8 @@ static void wifi_receiving_task(void *pvParameters) {
       xEventGroupSetBits(s_wifi_event_group, WIFI_SOCKET_DISCONNECTED);
       //printf("No data!\n");
     } else {
+      ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
+      xEventGroupSetBits(s_wifi_event_group, WIFI_SOCKET_DISCONNECTED);
       vTaskDelay(10);
     }
   }
