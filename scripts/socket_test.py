@@ -1,26 +1,18 @@
 import time
 import socket
 
-from cflib.cpx.transports import SocketTransport
-from cflib.cpx import CPX, CPXPacket, CPXTarget, CPXFunction
+host = '10.8.216.77'
+port = 5000
 
-def main():
-    host = '10.8.216.77'
-    port = 5000
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((host, port))
 
-    cpx = CPX(SocketTransport(host, port))
-    packet = CPXPacket(function=CPXFunction.CONSOLE, destination=CPXTarget.STM32, data=b"Hello\n\0")
-    # packet.lastPacket = True
+while True:
+    try:
+        s.send(b"Hello\n\0")
+        time.sleep(5)
+        print("Sending...")
+    except KeyboardInterrupt:
+        break
 
-    while True:
-        try:
-            cpx.sendPacket(packet)
-            time.sleep(5)
-            print("Sending...")
-        except KeyboardInterrupt:
-            break
-
-    cpx.close()
-
-if __name__ == "__main__":
-    main()
+s.close()
