@@ -2,3 +2,6 @@
 	path = MonoNav-firmware
 	url = git@github.com:johnnwallace/MonoNav-firmware.git
 	branch = wifi-deck
+[submodule "cloud-deck/components/XPowersLib"]
+	path = cloud-deck/components/XPowersLib
+	url = git@github.com:lewisxhe/XPowersLib.git
