@@ -16,7 +16,6 @@
 #include "esp_transport.h"
 #include "router.h"
 #include "wifi.h"
-#include "server.h"
 
 void app_main(void)
 {
@@ -31,7 +30,6 @@ void app_main(void)
     esp_log_level_set("COM", ESP_LOG_INFO);
     esp_log_level_set("TEST", ESP_LOG_INFO);
     esp_log_level_set("WIFI", ESP_LOG_INFO);
-    esp_log_level_set("SERVER", ESP_LOG_INFO);
     esp_log_level_set("ESP", ESP_LOG_INFO);
 
     ESP_LOGI("SYS", "\n\n -- Starting up --\n");
@@ -39,6 +37,5 @@ void app_main(void)
     xTaskCreate(uart_transport_init, "UART transport init", 8192, NULL, 2, NULL);
     xTaskCreate(espTransportInit, "ESP transport init", 8192, NULL, 2, NULL);
     xTaskCreate(wifi_init, "Router init", 8192, NULL, 2, NULL);
-    xTaskCreate(init_webserver, "Server init", 8192, NULL, 2, NULL);
     xTaskCreate(router_init, "Router init", 8192, NULL, 2, NULL);
 }
