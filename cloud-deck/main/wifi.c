@@ -209,7 +209,7 @@ static void wifi_init_sta(const char * ssid, const char * key)
 //   }
 // }
 
-void wifi_bind_socket() {
+static void wifi_bind_socket() {
   char addr_str[128];
   int addr_family;
   int ip_protocol;
@@ -259,7 +259,7 @@ void wifi_wait_for_socket_connected() {
   ESP_LOGI(TAG, "Connection accepted");
 }
 
-void wifi_wait_for_disconnect() {
+static void wifi_wait_for_disconnect() {
   xEventGroupWaitBits(s_wifi_event_group, WIFI_SOCKET_DISCONNECTED, pdTRUE, pdFALSE, portMAX_DELAY);
 }
 
@@ -316,7 +316,7 @@ void wifi_send_packet(const char * buffer, size_t size) {
     ESP_LOGD(TAG, "Sending WiFi packet of size %u", size);
     int err = send(conn, buffer, size, 0);
     if (err < 0) {
-      // ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+      ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
       conn = -1;
       xEventGroupSetBits(s_wifi_event_group, WIFI_SOCKET_DISCONNECTED);
     }
@@ -421,7 +421,7 @@ void wifi_init() {
 
   wifi_init_sta(ssid, key);
 
-  ESP_LOGI("WIFI", "Wifi initialized");
+  ESP_LOGI(TAG, "Wifi initialized");
 
   vTaskDelete(NULL);
 }
