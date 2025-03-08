@@ -16,6 +16,7 @@
 #include "esp_transport.h"
 #include "router.h"
 #include "wifi.h"
+#include "cam.h"
 
 void app_main(void)
 {
@@ -38,4 +39,5 @@ void app_main(void)
     xTaskCreate(espTransportInit, "ESP transport init", 8192, NULL, 2, NULL);
     xTaskCreate(wifi_init, "Router init", 8192, NULL, 2, NULL);
     xTaskCreate(router_init, "Router init", 8192, NULL, 2, NULL);
+    xTaskCreate(camera_init, "Cam init", 8192, NULL, 2, NULL);
 }

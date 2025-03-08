@@ -248,7 +248,7 @@ static void wifi_bind_socket() {
   ESP_LOGD(TAG, "Socket listening");
 }
 
-void wifi_wait_for_socket_connected() {
+static void wifi_wait_for_socket_connected() {
   ESP_LOGI(TAG, "Waiting for connection");
   struct sockaddr sourceAddr;
   uint addrLen = sizeof(sourceAddr);
