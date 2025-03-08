@@ -72,7 +72,7 @@ static void wifi_bind_socket()
     struct sockaddr_in destAddr;
     destAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     destAddr.sin_family = AF_INET;
-    destAddr.sin_port = htons(80);
+    destAddr.sin_port = htons(8080);
     addr_family = AF_INET;
     ip_protocol = IPPROTO_IP;
     inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
@@ -104,7 +104,7 @@ static void wifi_bind_socket()
     ESP_LOGD(TAG, "Socket listening");
 }
   
-void wifi_wait_for_socket_connected()
+static void wifi_wait_for_socket_connected()
 {
     ESP_LOGI(TAG, "Waiting for connection");
     struct sockaddr sourceAddr;
@@ -174,7 +174,7 @@ static void streaming_task(void *pvParameters)
     }
 }
 
-void cam_init()
+void camera_init()
 {
     s_wifi_event_group = xEventGroupCreate();
     
