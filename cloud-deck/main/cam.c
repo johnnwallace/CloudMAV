@@ -91,6 +91,17 @@ static void wifi_bind_socket()
     setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
     setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
   
+    int yes = 1;
+    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes)) < 0) {
+        ESP_LOGW(TAG, "Failed to set TCP_NODELAY");
+    }
+    
+    // Increase send buffer size for better throughput
+    int send_buffer_size = 32768; // 32KB
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buffer_size, sizeof(send_buffer_size)) < 0) {
+        ESP_LOGW(TAG, "Failed to set send buffer size");
+    }
+
     int err = bind(sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
     if (err != 0) {
         ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
