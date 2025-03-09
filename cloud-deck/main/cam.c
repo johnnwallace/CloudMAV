@@ -7,6 +7,7 @@
 
 #include "esp_log.h"
 #include "esp_camera.h"
+#include "esp_crc.h"
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
@@ -63,6 +64,8 @@ static EventGroupHandle_t startUpEventGroup;
 static int sock = -1;
 /* Accepted WiFi connection */
 static int conn = -1;
+
+static uint8_t magic_bytes = {0xF0, 0x9F, 0x93, 0xB7};
 
 static void wifi_bind_socket()
 {
@@ -158,25 +161,23 @@ static void streaming_task(void *pvParameters)
             continue;
         }
 
-        // Send frame size first
+        // Send magic bytes
+        wifi_send_packet((const char *)&magic_bytes, sizeof(magic_bytes));
+
+        // Send frame size
         wifi_send_packet((const char *)&fb->len, sizeof(fb->len));
         
+        // Send CRC
+        uint32_t crc = esp_crc32_le(0, fb->buf, fb->len);
+        wifi_send_packet((const char *)&crc, sizeof(crc));
+
         // Send the frame
         int sent = 0;
         int remaining = fb->len;
         
         while (remaining > 0) {
             int bytes_to_send = remaining > FRAME_CHUNK_SIZE ? FRAME_CHUNK_SIZE : remaining; // Send in chunks
-            
-            // Ensure we never send a 4-byte packet
-            if (bytes_to_send == sizeof(fb->len)) {
-                uint8_t packet[bytes_to_send + 1];
-                memcpy(packet + 1, fb->buf + sent, bytes_to_send);
-                wifi_send_packet((const char *)packet, bytes_to_send + 1);
-            } else {
-                wifi_send_packet((const char *)(fb->buf + sent), bytes_to_send);
-            }
-            
+            wifi_send_packet((const char *)(fb->buf + sent), bytes_to_send);
             sent += bytes_to_send;
             remaining -= bytes_to_send;
         }
