@@ -12,6 +12,7 @@ import argparse
 RECV_BUFFER_SIZE = 1024 * 1024
 MAX_FRAME_SIZE = 800 * 600 * 3 * 5 / 8
 CHUNK_SIZE = 4096
+MAGIC_BYTES = bytearray([0xb7, 0x93, 0x9f, 0xf0])
 
 class CameraClient:
     def __init__(self, host, port, buffer_size=5):
@@ -65,92 +66,107 @@ class CameraClient:
         self.running = True
         self.stats['start_time'] = time.time()
         
+        magic_index = 0
         while self.running and self.connected:
             try:
                 # Wait for magic numbers
                 readable, _, _ = select.select([self.sock], [], [], None)
 
-                magic_bytes = self.sock.recv(4)
-                if not magic_bytes:
-                    self.disconnect()
-                    break
-                if (magic_bytes != b'\xb7\x93\x9f\xf0'):
-                    continue
-                print("Magic bytes received")
-                self.stats['bytes_received'] += 4
-
-                # Read CRC
-                crc_data = self.sock.recv(4)
-                if not crc_data or len(crc_data) != 4:
-                    self.disconnect()
-                    break
-                crc = struct.unpack('<I', crc_data)[0]
-                print(f"CRC: {crc}")
-                self.stats['bytes_received'] += 4
-
-                # Read frame size and verify
-                size_data = self.sock.recv(4)
-                if not size_data or len(size_data) != 4:
-                    print("Bad length!")
-                    self.disconnect()
-                    break
-                frame_size = struct.unpack('<I', size_data)[0]
-                if frame_size > MAX_FRAME_SIZE:
-                    print(f"Bad length!: {frame_size}")
-                    continue
-                print(f"Frame size: {frame_size}")
-                self.stats['bytes_received'] += 4
-                
-                # Read frame data
-                frame_data = bytearray()
-                remaining = frame_size
-                
-                while remaining > 0:
-                    chunk_size = min(remaining, CHUNK_SIZE)
-                    chunk = self.sock.recv(chunk_size)
-                    
-                    if not chunk:
+                # Sliding window for magic bytes seems to add ~3 ms to latency
+                if magic_index < len(MAGIC_BYTES):
+                    # Still looking for magic bytes
+                    byte = self.sock.recv(1)
+                    if not byte:
                         self.disconnect()
                         break
-                    
-                    frame_data.extend(chunk)
-                    remaining -= len(chunk)
-                
-                # Verify CRC
-                if zlib.crc32(frame_data) & 0xffffffff != crc:
-                    print("Bad CRC!")
-                    continue
 
-                if len(frame_data) == frame_size:
-                    # Successfully received a complete frame
-                    # Decode JPEG to image
-                    frame_timestamp = time.time()
-                    img = cv2.imdecode(np.frombuffer(frame_data, np.uint8), cv2.IMREAD_COLOR)
+                    if byte[0] == MAGIC_BYTES[magic_index]:
+                        # Matched next byte in sequence
+                        magic_index += 1
+                        if magic_index == len(MAGIC_BYTES):
+                            # Complete magic number found!
+                            print("Magic bytes detected!")
+                    else:
+                        # Mismatch - check if this byte could be the start of magic
+                        if byte == MAGIC_BYTES[0]:
+                            magic_index = 1  # Started a new potential match
+                        else:
+                            magic_index = 0  # Reset magic detection
+                else:
+
+                    # Read CRC
+                    crc_data = self.sock.recv(4)
+                    if not crc_data or len(crc_data) != 4:
+                        self.disconnect()
+                        break
+                    crc = struct.unpack('<I', crc_data)[0]
+                    print(f"CRC: {crc}")
+                    self.stats['bytes_received'] += 4
+
+                    # Read frame size and verify
+                    size_data = self.sock.recv(4)
+                    if not size_data or len(size_data) != 4:
+                        print("Bad length!")
+                        self.disconnect()
+                        break
+                    frame_size = struct.unpack('<I', size_data)[0]
+                    if frame_size > MAX_FRAME_SIZE:
+                        print(f"Bad length!: {frame_size}")
+                        continue
+                    print(f"Frame size: {frame_size}")
+                    self.stats['bytes_received'] += 4
                     
-                    if img is not None:
-                        # Add timestamp to the frame for latency calculation
-                        frame_with_ts = {
-                            'image': img,
-                            'timestamp': frame_timestamp
-                        }
+                    # Read frame data
+                    frame_data = bytearray()
+                    remaining = frame_size
+                    
+                    while remaining > 0:
+                        chunk_size = min(remaining, CHUNK_SIZE)
+                        chunk = self.sock.recv(chunk_size)
                         
-                        # Put in queue, if full, remove oldest
-                        if self.frame_queue.full():
-                            try:
-                                self.frame_queue.get_nowait()
-                            except queue.Empty:
-                                pass
+                        if not chunk:
+                            self.disconnect()
+                            break
                         
-                        self.frame_queue.put(frame_with_ts)
-                        self.latest_frame = frame_with_ts
+                        frame_data.extend(chunk)
+                        remaining -= len(chunk)
+                    
+                    # Verify CRC
+                    if zlib.crc32(frame_data) & 0xffffffff != crc:
+                        print("Bad CRC!")
+                        continue
+
+                    magic_index = 0
+                    if len(frame_data) == frame_size:
+                        # Successfully received a complete frame
+                        # Decode JPEG to image
+                        frame_timestamp = time.time()
+                        img = cv2.imdecode(np.frombuffer(frame_data, np.uint8), cv2.IMREAD_COLOR)
                         
-                        # Update statistics
-                        self.stats['frames_received'] += 1
-                        self.stats['bytes_received'] += frame_size
-                        
-                        elapsed = frame_timestamp - self.stats['start_time']
-                        if elapsed > 0:
-                            self.stats['fps'] = self.stats['frames_received'] / elapsed
+                        if img is not None:
+                            # Add timestamp to the frame for latency calculation
+                            frame_with_ts = {
+                                'image': img,
+                                'timestamp': frame_timestamp
+                            }
+                            
+                            # Put in queue, if full, remove oldest
+                            if self.frame_queue.full():
+                                try:
+                                    self.frame_queue.get_nowait()
+                                except queue.Empty:
+                                    pass
+                            
+                            self.frame_queue.put(frame_with_ts)
+                            self.latest_frame = frame_with_ts
+                            
+                            # Update statistics
+                            self.stats['frames_received'] += 1
+                            self.stats['bytes_received'] += frame_size
+                            
+                            elapsed = frame_timestamp - self.stats['start_time']
+                            if elapsed > 0:
+                                self.stats['fps'] = self.stats['frames_received'] / elapsed
                 
             except Exception as e:
                 print(f"Error receiving frame: {e}")
