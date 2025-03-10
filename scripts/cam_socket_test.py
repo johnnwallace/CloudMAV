@@ -2,6 +2,7 @@ import socket
 import select
 import struct
 import cv2
+import zlib
 import numpy as np
 import time
 import threading
@@ -35,7 +36,6 @@ class CameraClient:
     
     def connect(self):
         """Connect to the camera server"""
-        print("Waiting for connection...")
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # Disable Nagle's algorithm
@@ -74,18 +74,31 @@ class CameraClient:
                 if not magic_bytes:
                     self.disconnect()
                     break
-                if (magic_bytes != b'\xf0\x9f\x93\xb7'):
+                if (magic_bytes != b'\xb7\x93\x9f\xf0'):
                     continue
+                print("Magic bytes received")
+                self.stats['bytes_received'] += 4
+
+                # Read CRC
+                crc_data = self.sock.recv(4)
+                if not crc_data or len(crc_data) != 4:
+                    self.disconnect()
+                    break
+                crc = struct.unpack('<I', crc_data)[0]
+                print(f"CRC: {crc}")
                 self.stats['bytes_received'] += 4
 
                 # Read frame size and verify
                 size_data = self.sock.recv(4)
                 if not size_data or len(size_data) != 4:
+                    print("Bad length!")
                     self.disconnect()
                     break
                 frame_size = struct.unpack('<I', size_data)[0]
                 if frame_size > MAX_FRAME_SIZE:
+                    print(f"Bad length!: {frame_size}")
                     continue
+                print(f"Frame size: {frame_size}")
                 self.stats['bytes_received'] += 4
                 
                 # Read frame data
@@ -103,7 +116,11 @@ class CameraClient:
                     frame_data.extend(chunk)
                     remaining -= len(chunk)
                 
-                #TODO: Verify
+                # Verify CRC
+                if zlib.crc32(frame_data) & 0xffffffff != crc:
+                    print("Bad CRC!")
+                    continue
+
                 if len(frame_data) == frame_size:
                     # Successfully received a complete frame
                     # Decode JPEG to image
