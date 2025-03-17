@@ -53,10 +53,10 @@ static CPXRoutablePacket_t txp;
 #define MAX_SSID_SIZE (50)
 #define MAX_PASSWD_SIZE (50)
 
-// static char ssid[MAX_SSID_SIZE] = "sensors_2G";
-// static char key[MAX_SSID_SIZE] = "onthisnetwork";
-static char ssid[MAX_SSID_SIZE] = "servicenet";
-static char key[MAX_SSID_SIZE] = "";
+static char ssid[MAX_SSID_SIZE] = "sensors_2G";
+static char key[MAX_SSID_SIZE] = "onthisnetwork";
+// static char ssid[MAX_SSID_SIZE] = "servicenet";
+// static char key[MAX_SSID_SIZE] = "";
 
 static const int WIFI_CONNECTED_BIT = BIT0;
 static const int WIFI_SOCKET_DISCONNECTED = BIT1;

@@ -8,18 +8,21 @@ from cflib.utils import uri_helper
 from cflib.positioning.motion_commander import MotionCommander
 
 
-HOST = '10.9.146.64'
-# HOST = '192.168.1.168'
+# HOST = '10.9.146.64'
+HOST = '192.168.1.168'
 PORT = 80
 
 uri = f"tcp://{HOST}:{PORT}"
 # uri = 'radio://0/81/2M/E7E7E7E7E7'
 
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 # logging.basicConfig(level=logging.ERROR)
 cflib.crtp.init_drivers()
 
-with SyncCrazyflie(uri, cf=Crazyflie(rw_cache='./cache')) as scf:
+with SyncCrazyflie(uri, cf=Crazyflie(rw_cache="./cache")) as scf:
+    # turn off link health check
+    # scf.cf.link
+
     print("Connected!")
     scf.cf.platform.send_arming_request(True)
     print("Amrmed!")
