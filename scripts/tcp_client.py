@@ -21,7 +21,6 @@ cflib.crtp.init_drivers()
 
 with SyncCrazyflie(uri, cf=Crazyflie(rw_cache="./cache")) as scf:
     # turn off link health check
-    # scf.cf.link
 
     print("Connected!")
     scf.cf.platform.send_arming_request(True)
