@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "esp_camera.h"
 #include "esp_crc.h"
+#include "esp_heap_caps.h"
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
@@ -22,7 +23,7 @@ static camera_config_t camera_config = {
     .pin_pwdn  = -1,
     .pin_reset = -1,
     .pin_xclk = 10,
-    .pin_sccb_sda = 30,
+    .pin_sccb_sda = 40,
     .pin_sccb_scl = 39,
 
     .pin_d7 = 48,
@@ -42,11 +43,16 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG,//YUV422,GRAYSCALE,RGB565,JPEG
-    .frame_size = FRAMESIZE_SVGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
+    // .frame_size = FRAMESIZE_SVGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
 
-    .jpeg_quality = CONFIG_JPEG_QUALITY, //0-63, for OV series camera sensors, lower number means higher quality
-    .fb_count = CAMERA_QUEUE_LENGTH, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
-    .grab_mode = CAMERA_GRAB_LATEST//CAMERA_GRAB_LATEST. Sets when buffers should be filled
+    // .jpeg_quality = CONFIG_JPEG_QUALITY, //0-63, for OV series camera sensors, lower number means higher quality
+    // .fb_count = CAMERA_QUEUE_LENGTH, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
+    .grab_mode = CAMERA_GRAB_LATEST,//CAMERA_GRAB_LATEST. Sets when buffers should be filled
+
+    .frame_size = FRAMESIZE_QVGA,
+    .fb_count = 1,
+    .jpeg_quality = 30
+
 };
 
 #define FREQ 30
@@ -65,7 +71,7 @@ static int sock = -1;
 /* Accepted WiFi connection */
 static int conn = -1;
 
-static uint8_t magic_bytes = {0xF0, 0x9F, 0x93, 0xB7};
+static uint8_t magic_bytes[] = {0xF0, 0x9F, 0x93, 0xB7};
 
 static void wifi_bind_socket()
 {
