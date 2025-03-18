@@ -104,12 +104,6 @@ static void wifi_bind_socket()
     if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes)) < 0) {
         ESP_LOGW(TAG, "Failed to set TCP_NODELAY");
     }
-    
-    // Increase send buffer size for better throughput
-    int send_buffer_size = 32768; // 32KB
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &send_buffer_size, sizeof(send_buffer_size)) < 0) {
-        ESP_LOGW(TAG, "Failed to set send buffer size");
-    }
 
     int err = bind(sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
     if (err != 0) {
@@ -151,9 +145,12 @@ static void wifi_wait_for_disconnect()
 static void wifi_send_packet(const char * buffer, size_t size)
 {
     if (conn != -1) {
-        ESP_LOGD(TAG, "Sending WiFi packet of size %u", size);
+        ESP_LOGI(TAG, "Sending WiFi packet of size %u", size);
         int err = send(conn, buffer, size, 0);
         if (err < 0) wifi_close_socket();
+        if (err < size) {
+            ESP_LOGI(TAG, "Failed to send all bytes");
+        }
     }
   }
   
@@ -161,6 +158,7 @@ static void streaming_task(void *pvParameters)
 {
     xEventGroupSetBits(startUpEventGroup, START_UP_STREAMING_TASK);
     while(1) {
+        vTaskDelay(pdMS_TO_TICKS(10));
         camera_fb_t *fb = esp_camera_fb_get();
         if (!fb) {
             ESP_LOGE(TAG, "Failed to capture frame");
@@ -169,13 +167,16 @@ static void streaming_task(void *pvParameters)
 
         // Send magic bytes
         wifi_send_packet((const char *)&magic_bytes, sizeof(magic_bytes));
-
-        // Send frame size
-        wifi_send_packet((const char *)&fb->len, sizeof(fb->len));
+        ESP_LOGI(TAG, "Sent magic bytes");
         
         // Send CRC
         uint32_t crc = esp_crc32_le(0, fb->buf, fb->len);
         wifi_send_packet((const char *)&crc, sizeof(crc));
+        ESP_LOGI(TAG, "Sent CRC: %lu", crc);
+
+        // Send frame size
+        wifi_send_packet((const char *)&fb->len, sizeof(fb->len));
+        ESP_LOGI(TAG, "Sent size byte");
 
         // Send the frame
         int sent = 0;
@@ -186,6 +187,7 @@ static void streaming_task(void *pvParameters)
             wifi_send_packet((const char *)(fb->buf + sent), bytes_to_send);
             sent += bytes_to_send;
             remaining -= bytes_to_send;
+            ESP_LOGI(TAG, "Sent %d bytes", bytes_to_send);
         }
 
         esp_camera_fb_return(fb);

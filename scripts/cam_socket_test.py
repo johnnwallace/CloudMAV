@@ -12,7 +12,7 @@ import argparse
 RECV_BUFFER_SIZE = 1024 * 1024
 MAX_FRAME_SIZE = 800 * 600 * 3 * 5 / 8
 CHUNK_SIZE = 4096
-MAGIC_BYTES = bytearray([0xb7, 0x93, 0x9f, 0xf0])
+MAGIC_BYTES = bytearray([0xf0, 0x9f, 0x93, 0xb7])
 
 class CameraClient:
     def __init__(self, host, port, buffer_size=5):
@@ -69,13 +69,15 @@ class CameraClient:
         magic_index = 0
         while self.running and self.connected:
             try:
-                # Wait for magic numbers
+                # Wait for bytes
                 readable, _, _ = select.select([self.sock], [], [], None)
 
                 # Sliding window for magic bytes seems to add ~3 ms to latency
                 if magic_index < len(MAGIC_BYTES):
                     # Still looking for magic bytes
+                    print("Reading magic")
                     byte = self.sock.recv(1)
+                    print(byte)
                     if not byte:
                         self.disconnect()
                         break
@@ -95,21 +97,24 @@ class CameraClient:
                 else:
 
                     # Read CRC
+                    print("Reading CRC")
                     crc_data = self.sock.recv(4)
+                    print(crc_data)
                     if not crc_data or len(crc_data) != 4:
                         self.disconnect()
                         break
-                    crc = struct.unpack('<I', crc_data)[0]
+                    crc = struct.unpack('I', crc_data)[0]
                     print(f"CRC: {crc}")
                     self.stats['bytes_received'] += 4
 
                     # Read frame size and verify
+                    print("Reading size")
                     size_data = self.sock.recv(4)
                     if not size_data or len(size_data) != 4:
                         print("Bad length!")
                         self.disconnect()
                         break
-                    frame_size = struct.unpack('<I', size_data)[0]
+                    frame_size = struct.unpack('I', size_data)[0]
                     if frame_size > MAX_FRAME_SIZE:
                         print(f"Bad length!: {frame_size}")
                         continue
@@ -122,6 +127,7 @@ class CameraClient:
                     
                     while remaining > 0:
                         chunk_size = min(remaining, CHUNK_SIZE)
+                        print("Reading chunk")
                         chunk = self.sock.recv(chunk_size)
                         
                         if not chunk:
