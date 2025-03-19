@@ -14,16 +14,83 @@
  */
 static const char *TAG = "WEBSOCKET";
 
+httpd_handle_t server;
+
+static esp_err_t ws_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "URI %s", req->uri);
+
+    if (req->method == HTTP_GET) {
+        ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+        return ESP_OK;
+    }
+    httpd_ws_frame_t ws_pkt;
+    uint8_t *buf = NULL;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    /* Set max_len = 0 to get the frame len */
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        return ret;
+    }
+    ESP_LOGI(TAG, "frame len is %d", ws_pkt.len);
+    
+    if (ws_pkt.len) {
+        /* Allocate memory for the message */
+        buf = calloc(1, ws_pkt.len + 1);
+        if (buf == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate memory");
+            return ESP_ERR_NO_MEM;
+        }
+        
+        /* Set the frame data length to the allocated buffer length */
+        ws_pkt.payload = buf;
+        
+        /* Receive the frame data */
+        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            free(buf);
+            return ret;
+        }
+        
+        ESP_LOGI(TAG, "Received packet with message: %s", ws_pkt.payload);
+        
+        /* Echo the received message back to the client */
+        ret = httpd_ws_send_frame(req, &ws_pkt);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
+        }
+        
+        free(buf);
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t get_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "GET request received");
+    const char *resp_str = "Hello from ESP32!";
+    httpd_resp_send(req, resp_str, strlen(resp_str));
+    return ESP_OK;
+}
+
 static const httpd_uri_t ws = {
     .uri        = "/ws",
     .method     = HTTP_GET,
+    .handler    = ws_handler,
+    // .handler   = get_handler,
     .user_ctx   = NULL,
-    .is_websocket = true
+    .is_websocket = true,
+    .handle_ws_control_frames = true
 };
 
-static httpd_handle_t start_webserver(void)
+static httpd_handle_t start_websocket(void)
 {
-    httpd_handle_t server = NULL;
+    server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
     // Start the httpd server
@@ -39,7 +106,7 @@ static httpd_handle_t start_webserver(void)
     return NULL;
 }
 
-static esp_err_t stop_webserver(httpd_handle_t server)
+static esp_err_t stop_websocket(void)
 {
     // Stop the httpd server
     return httpd_stop(server);
@@ -47,12 +114,11 @@ static esp_err_t stop_webserver(httpd_handle_t server)
 
 static void disconnect_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data)
-{
-    httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (*server) {
+{   
+    if (server) {
         ESP_LOGI(TAG, "Stopping webserver");
-        if (stop_webserver(*server) == ESP_OK) {
-            *server = NULL;
+        if (stop_websocket() == ESP_OK) {
+            server = NULL;
         } else {
             ESP_LOGE(TAG, "Failed to stop http server");
         }
@@ -62,21 +128,18 @@ static void disconnect_handler(void* arg, esp_event_base_t event_base,
 static void connect_handler(void* arg, esp_event_base_t event_base,
                             int32_t event_id, void* event_data)
 {
-    httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (*server == NULL) {
+    if (server == NULL) {
         ESP_LOGI(TAG, "Starting webserver");
-        *server = start_webserver();
+        server = start_websocket();
     }
 }
 
 void socket_init()
-{
-    static httpd_handle_t server = NULL;
-    
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
+{    
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, NULL));
 
-    server = start_webserver();
+    server = start_websocket();
 
     vTaskDelete(NULL);
 }
