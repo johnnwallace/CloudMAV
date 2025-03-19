@@ -247,8 +247,8 @@ class CameraClient:
 
 def main():
     parser = argparse.ArgumentParser(description='ESP32 Camera Client')
-    parser.add_argument('--host', default='192.168.1.100', help='ESP32 IP address')
-    parser.add_argument('--port', type=int, default=8000, help='Camera server port')
+    parser.add_argument('--host', default='192.168.1.168', help='ESP32 IP address')
+    parser.add_argument('--port', type=int, default=8080, help='Camera server port')
     args = parser.parse_args()
     
     client = CameraClient(args.host, args.port)
