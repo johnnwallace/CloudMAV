@@ -17,6 +17,7 @@
 #include "router.h"
 #include "wifi.h"
 #include "cam.h"
+#include "websocket.h"
 
 void app_main(void)
 {
@@ -35,6 +36,7 @@ void app_main(void)
     esp_log_level_set("CAM", ESP_LOG_INFO);
     esp_log_level_set("camera", ESP_LOG_INFO);
     esp_log_level_set("cam_hal", ESP_LOG_INFO);
+    esp_log_level_set("WEBSOCKET", ESP_LOG_INFO);
 
     ESP_LOGI("SYS", "\n\n -- Starting up --\n");
 
@@ -43,4 +45,5 @@ void app_main(void)
     xTaskCreate(wifi_init, "Router init", 8192, NULL, 2, NULL);
     xTaskCreate(router_init, "Router init", 8192, NULL, 2, NULL);
     xTaskCreate(camera_init, "Cam init", 8192, NULL, 2, NULL);
+    xTaskCreate(socket_init, "Websocket init", 8192, NULL, 2, NULL);
 }

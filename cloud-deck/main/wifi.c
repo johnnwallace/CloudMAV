@@ -216,7 +216,7 @@ static void wifi_bind_socket() {
   struct sockaddr_in destAddr;
   destAddr.sin_addr.s_addr = htonl(INADDR_ANY);
   destAddr.sin_family = AF_INET;
-  destAddr.sin_port = htons(80);
+  destAddr.sin_port = htons(8000);
   addr_family = AF_INET;
   ip_protocol = IPPROTO_IP;
   inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
