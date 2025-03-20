@@ -60,99 +60,10 @@ static camera_config_t camera_config = {
 
 static const char *TAG = "CAM";
 
-static const int WIFI_SOCKET_DISCONNECTED = BIT1;
-static EventGroupHandle_t s_wifi_event_group;
-
 static const int START_UP_STREAMING_TASK = BIT1;
 static EventGroupHandle_t startUpEventGroup;
 
-/* Socket for receiving WiFi connections */
-static int sock = -1;
-/* Accepted WiFi connection */
-static int conn = -1;
-
 static uint8_t magic_bytes[] = {0xF0, 0x9F, 0x93, 0xB7};
-
-static void wifi_bind_socket()
-{
-    char addr_str[128];
-    int addr_family;
-    int ip_protocol;
-    struct sockaddr_in destAddr;
-    destAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    destAddr.sin_family = AF_INET;
-    destAddr.sin_port = htons(8080);
-    addr_family = AF_INET;
-    ip_protocol = IPPROTO_IP;
-    inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
-        sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-    if (sock < 0) {
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-    }
-    ESP_LOGD(TAG, "Socket created");
-  
-    int keepalive = 1;
-    int keepidle = 5;
-    int keepintvl = 5;
-    int keepcnt = 3;
-    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
-    setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
-    setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
-    setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
-  
-    int yes = 1;
-    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes)) < 0) {
-        ESP_LOGW(TAG, "Failed to set TCP_NODELAY");
-    }
-
-    int err = bind(sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
-    if (err != 0) {
-        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-    }
-    ESP_LOGD(TAG, "Socket binded");
-  
-    err = listen(sock, 1);
-    if (err != 0) {
-        ESP_LOGE(TAG, "Error occured during listen: errno %d", errno);
-    }
-    ESP_LOGD(TAG, "Socket listening");
-}
-  
-static void wifi_wait_for_socket_connected()
-{
-    ESP_LOGI(TAG, "Waiting for connection");
-    struct sockaddr sourceAddr;
-    uint addrLen = sizeof(sourceAddr);
-    conn = accept(sock, (struct sockaddr *)&sourceAddr, (socklen_t *)&addrLen);
-    if (conn < 0) {
-        ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-    }
-    ESP_LOGI(TAG, "Connection accepted");
-}
-
-static void wifi_close_socket()
-{
-    close(conn);
-    conn = -1;
-    xEventGroupSetBits(s_wifi_event_group, WIFI_SOCKET_DISCONNECTED);
-}
-
-static void wifi_wait_for_disconnect()
-{
-    xEventGroupWaitBits(s_wifi_event_group, WIFI_SOCKET_DISCONNECTED, pdTRUE, pdFALSE, portMAX_DELAY);
-}
-
-static void wifi_send_packet(const char * buffer, size_t size)
-{
-    if (conn != -1) {
-        ESP_LOGI(TAG, "Sending WiFi packet of size %u", size);
-        int err = send(conn, buffer, size, 0);
-        if (err < 0) wifi_close_socket();
-        if (err < size) {
-            ESP_LOGI(TAG, "Failed to send all bytes");
-        }
-    }
-  }
   
 static void streaming_task(void *pvParameters)
 {
@@ -166,16 +77,16 @@ static void streaming_task(void *pvParameters)
         }
 
         // Send magic bytes
-        wifi_send_packet((const char *)&magic_bytes, sizeof(magic_bytes));
+        // wifi_send_packet((const char *)&magic_bytes, sizeof(magic_bytes));
         ESP_LOGI(TAG, "Sent magic bytes");
         
         // Send CRC
         uint32_t crc = esp_crc32_le(0, fb->buf, fb->len);
-        wifi_send_packet((const char *)&crc, sizeof(crc));
+        // wifi_send_packet((const char *)&crc, sizeof(crc));
         ESP_LOGI(TAG, "Sent CRC: %lu", crc);
 
         // Send frame size
-        wifi_send_packet((const char *)&fb->len, sizeof(fb->len));
+        // wifi_send_packet((const char *)&fb->len, sizeof(fb->len));
         ESP_LOGI(TAG, "Sent size byte");
 
         // Send the frame
@@ -184,7 +95,7 @@ static void streaming_task(void *pvParameters)
         
         while (remaining > 0) {
             int bytes_to_send = remaining > FRAME_CHUNK_SIZE ? FRAME_CHUNK_SIZE : remaining; // Send in chunks
-            wifi_send_packet((const char *)(fb->buf + sent), bytes_to_send);
+            // wifi_send_packet((const char *)(fb->buf + sent), bytes_to_send);
             sent += bytes_to_send;
             remaining -= bytes_to_send;
             ESP_LOGI(TAG, "Sent %d bytes", bytes_to_send);
@@ -196,10 +107,8 @@ static void streaming_task(void *pvParameters)
 
 void camera_init()
 {
-    s_wifi_event_group = xEventGroupCreate();
-    
-    wifi_bind_socket();
-    wifi_wait_for_socket_connected();
+    // wifi_bind_socket();
+    // wifi_wait_for_socket_connected();
 
     ESP_ERROR_CHECK(esp_camera_init(&camera_config));
 
