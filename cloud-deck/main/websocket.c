@@ -1,5 +1,10 @@
 #include "websocket.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
+#include "freertos/event_groups.h"
 #include <esp_wifi.h>
 #include <esp_event.h>
 #include <esp_log.h>
@@ -8,22 +13,43 @@
 #include <sys/param.h>
 #include "esp_netif.h"
 
+#include "esp_camera.h"
+#include "esp_crc.h"
+#include "esp_heap_caps.h"
+
 #include <esp_http_server.h>
 
-/* A simple example that demonstrates using websocket echo server
- */
 static const char *TAG = "WEBSOCKET";
 
+static QueueHandle_t wsTxQueue;
+
 httpd_handle_t server;
+
+// Global variable to store the WebSocket client fd
+static int ws_client_fd = -1;
+static SemaphoreHandle_t ws_client_lock = NULL; // For thread safety
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "URI %s", req->uri);
 
     if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+        int fd = httpd_req_to_sockfd(req);
+        xSemaphoreTake(ws_client_lock, portMAX_DELAY);
+
+        // If we already have a client, close the old connection
+        if (ws_client_fd != -1) {
+            ESP_LOGI(TAG, "New client connecting, closing old connection (fd=%d)", ws_client_fd);
+            httpd_sess_trigger_close(req->handle, ws_client_fd);
+        }
+        
+        // Store the new client fd
+        ws_client_fd = fd;
+        ESP_LOGI(TAG, "Handshake done, new connection established (fd=%d)", ws_client_fd);
+        xSemaphoreGive(ws_client_lock);
         return ESP_OK;
     }
+
     httpd_ws_frame_t ws_pkt;
     uint8_t *buf = NULL;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
@@ -70,19 +96,10 @@ static esp_err_t ws_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-static esp_err_t get_handler(httpd_req_t *req)
-{
-    ESP_LOGI(TAG, "GET request received");
-    const char *resp_str = "Hello from ESP32!";
-    httpd_resp_send(req, resp_str, strlen(resp_str));
-    return ESP_OK;
-}
-
 static const httpd_uri_t ws = {
     .uri        = "/ws",
     .method     = HTTP_GET,
     .handler    = ws_handler,
-    // .handler   = get_handler,
     .user_ctx   = NULL,
     .is_websocket = true,
     .handle_ws_control_frames = true
@@ -134,8 +151,44 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+static void ws_tx_task(void *pvParameters)
+{
+    static camera_fb_t* im;
+    // xEventGroupSetBits(startUpEventGroup, START_UP_TX_TASK);
+    while (1) {
+        if (server) { // ensure this task only runs when we have a connection            
+            xQueueReceive(wsTxQueue, &im, portMAX_DELAY);
+
+            httpd_ws_frame_t ws_pkt;
+            ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+            ws_pkt.len = im->len;
+            ws_pkt.payload = im->buf;
+
+            esp_err_t ret = httpd_ws_send_frame_async(server, ws_client_fd, &ws_pkt);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to send image: %d", ret);
+            }
+
+            esp_camera_fb_return(im);
+        }
+    }
+}
+
+void ws_send_image(const camera_fb_t* im)
+{
+    ESP_LOGI(TAG, "Sending image to tx queue");
+    xQueueSend(wsTxQueue, &im, portMAX_DELAY);
+}
+
 void socket_init()
 {    
+    wsTxQueue = xQueueCreate(2, sizeof(camera_fb_t*));
+
+    ws_client_lock = xSemaphoreCreateMutex();
+    if (ws_client_lock == NULL) {
+        ESP_LOGE(TAG, "Failed to create WebSocket client mutex!");
+    }
+
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, NULL));
 

@@ -16,6 +16,8 @@
 #include "lwip/netdb.h"
 #include "esp_netif.h"
 
+#include "websocket.h"
+
 #define CONFIG_JPEG_QUALITY 12
 #define CAMERA_QUEUE_LENGTH 4
 
@@ -43,15 +45,11 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG,//YUV422,GRAYSCALE,RGB565,JPEG
-    // .frame_size = FRAMESIZE_SVGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
+    .frame_size = FRAMESIZE_SVGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
 
-    // .jpeg_quality = CONFIG_JPEG_QUALITY, //0-63, for OV series camera sensors, lower number means higher quality
-    // .fb_count = CAMERA_QUEUE_LENGTH, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
+    .jpeg_quality = CONFIG_JPEG_QUALITY, //0-63, for OV series camera sensors, lower number means higher quality
+    .fb_count = CAMERA_QUEUE_LENGTH, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
     .grab_mode = CAMERA_GRAB_LATEST,//CAMERA_GRAB_LATEST. Sets when buffers should be filled
-
-    .frame_size = FRAMESIZE_QVGA,
-    .fb_count = 1,
-    .jpeg_quality = 30
 
 };
 
@@ -69,39 +67,14 @@ static void streaming_task(void *pvParameters)
 {
     xEventGroupSetBits(startUpEventGroup, START_UP_STREAMING_TASK);
     while(1) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(100));
         camera_fb_t *fb = esp_camera_fb_get();
         if (!fb) {
             ESP_LOGE(TAG, "Failed to capture frame");
             continue;
         }
 
-        // Send magic bytes
-        // wifi_send_packet((const char *)&magic_bytes, sizeof(magic_bytes));
-        ESP_LOGI(TAG, "Sent magic bytes");
-        
-        // Send CRC
-        uint32_t crc = esp_crc32_le(0, fb->buf, fb->len);
-        // wifi_send_packet((const char *)&crc, sizeof(crc));
-        ESP_LOGI(TAG, "Sent CRC: %lu", crc);
-
-        // Send frame size
-        // wifi_send_packet((const char *)&fb->len, sizeof(fb->len));
-        ESP_LOGI(TAG, "Sent size byte");
-
-        // Send the frame
-        int sent = 0;
-        int remaining = fb->len;
-        
-        while (remaining > 0) {
-            int bytes_to_send = remaining > FRAME_CHUNK_SIZE ? FRAME_CHUNK_SIZE : remaining; // Send in chunks
-            // wifi_send_packet((const char *)(fb->buf + sent), bytes_to_send);
-            sent += bytes_to_send;
-            remaining -= bytes_to_send;
-            ESP_LOGI(TAG, "Sent %d bytes", bytes_to_send);
-        }
-
-        esp_camera_fb_return(fb);
+        ws_send_image(fb);
     }
 }
 
