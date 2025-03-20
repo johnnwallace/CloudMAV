@@ -29,6 +29,8 @@ httpd_handle_t server;
 static int ws_client_fd = -1;
 static SemaphoreHandle_t ws_client_lock = NULL; // For thread safety
 
+static void (*connection_callback)(bool connected) = NULL;
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "URI %s", req->uri);
@@ -47,6 +49,11 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ws_client_fd = fd;
         ESP_LOGI(TAG, "Handshake done, new connection established (fd=%d)", ws_client_fd);
         xSemaphoreGive(ws_client_lock);
+
+        if (connection_callback) {
+            connection_callback(true);
+        }
+
         return ESP_OK;
     }
 
@@ -149,6 +156,10 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Starting webserver");
         server = start_websocket();
     }
+}
+
+void ws_register_connection_callback(void (*callback)(bool connected)) {
+    connection_callback = callback;
 }
 
 static void ws_tx_task(void *pvParameters)

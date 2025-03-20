@@ -62,26 +62,43 @@ static const int START_UP_STREAMING_TASK = BIT1;
 static EventGroupHandle_t startUpEventGroup;
 
 static uint8_t magic_bytes[] = {0xF0, 0x9F, 0x93, 0xB7};
-  
+
+static bool streamingActive = false;
+
+// Connection callback function
+static void connection_status_changed(bool connected) {
+    if (connected && !streamingActive) {
+        ESP_LOGI(TAG, "WebSocket client connected, starting camera streaming");
+        streamingActive = true;
+    } else if (!connected && streamingActive) {
+        ESP_LOGI(TAG, "WebSocket client disconnected, stopping camera streaming");
+        streamingActive = false;
+    }
+}
+
 static void streaming_task(void *pvParameters)
 {
     xEventGroupSetBits(startUpEventGroup, START_UP_STREAMING_TASK);
     while(1) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        camera_fb_t *fb = esp_camera_fb_get();
-        if (!fb) {
-            ESP_LOGE(TAG, "Failed to capture frame");
-            continue;
-        }
+        if (streamingActive) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            camera_fb_t *fb = esp_camera_fb_get();
+            if (!fb) {
+                ESP_LOGE(TAG, "Failed to capture frame");
+                continue;
+            }
 
-        ws_send_image(fb);
+            ws_send_image(fb);
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
     }
 }
 
 void camera_init()
 {
-    // wifi_bind_socket();
-    // wifi_wait_for_socket_connected();
+    // Register for WebSocket connection notifications
+    ws_register_connection_callback(connection_status_changed);
 
     ESP_ERROR_CHECK(esp_camera_init(&camera_config));
 
