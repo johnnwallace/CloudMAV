@@ -31,7 +31,7 @@ static SemaphoreHandle_t ws_client_lock = NULL; // For thread safety
 
 EventGroupHandle_t wsConnectionEventGroup;
 
-#define CHUNK_SIZE 1024
+#define CHUNK_SIZE 512
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
@@ -174,7 +174,7 @@ static void ws_tx_task(void *pvParameters)
                 
                 // Small delay to prevent TCP buffer overflow
                 if (remaining_len > 0) {
-                    vTaskDelay(pdMS_TO_TICKS(1));
+                    vTaskDelay(pdMS_TO_TICKS(15));
                 }
             }
 

@@ -78,7 +78,7 @@ static void streaming_task(void *pvParameters)
         }
         
         ws_send_image(fb);
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
