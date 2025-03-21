@@ -29,7 +29,7 @@ httpd_handle_t server;
 static int ws_client_fd = -1;
 static SemaphoreHandle_t ws_client_lock = NULL; // For thread safety
 
-static void (*connection_callback)(bool connected) = NULL;
+EventGroupHandle_t wsConnectionEventGroup;
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
@@ -50,10 +50,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ESP_LOGI(TAG, "Handshake done, new connection established (fd=%d)", ws_client_fd);
         xSemaphoreGive(ws_client_lock);
 
-        if (connection_callback) {
-            connection_callback(true);
-        }
-
+        xEventGroupSetBits(wsConnectionEventGroup, WS_CONNECTION_ACTIVE);
         return ESP_OK;
     }
 
@@ -143,6 +140,7 @@ static void disconnect_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Stopping webserver");
         if (stop_websocket() == ESP_OK) {
             server = NULL;
+            xEventGroupClearBits(wsConnectionEventGroup, WS_CONNECTION_ACTIVE);
         } else {
             ESP_LOGE(TAG, "Failed to stop http server");
         }
@@ -156,10 +154,6 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Starting webserver");
         server = start_websocket();
     }
-}
-
-void ws_register_connection_callback(void (*callback)(bool connected)) {
-    connection_callback = callback;
 }
 
 static void ws_tx_task(void *pvParameters)
@@ -194,16 +188,19 @@ void ws_send_image(const camera_fb_t* im)
 void socket_init()
 {    
     wsTxQueue = xQueueCreate(2, sizeof(camera_fb_t*));
-
+    
     ws_client_lock = xSemaphoreCreateMutex();
     if (ws_client_lock == NULL) {
         ESP_LOGE(TAG, "Failed to create WebSocket client mutex!");
     }
-
+    
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, NULL));
-
+    
+    wsConnectionEventGroup = xEventGroupCreate();
     server = start_websocket();
+
+    xTaskCreate(ws_tx_task, "WS TX Task", 8192, NULL, 2, NULL);
 
     vTaskDelete(NULL);
 }
