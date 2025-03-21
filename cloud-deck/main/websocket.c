@@ -31,6 +31,8 @@ static SemaphoreHandle_t ws_client_lock = NULL; // For thread safety
 
 EventGroupHandle_t wsConnectionEventGroup;
 
+#define CHUNK_SIZE 1024
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "URI %s", req->uri);
@@ -54,49 +56,17 @@ static esp_err_t ws_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    httpd_ws_frame_t ws_pkt;
-    uint8_t *buf = NULL;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-    /* Set max_len = 0 to get the frame len */
-    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
-        return ret;
-    }
-    ESP_LOGI(TAG, "frame len is %d", ws_pkt.len);
+    // // Just log frame info, then let ESP-IDF handle it automatically
+    // httpd_ws_frame_t ws_pkt;
+    // memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     
-    if (ws_pkt.len) {
-        /* Allocate memory for the message */
-        buf = calloc(1, ws_pkt.len + 1);
-        if (buf == NULL) {
-            ESP_LOGE(TAG, "Failed to allocate memory");
-            return ESP_ERR_NO_MEM;
-        }
-        
-        /* Set the frame data length to the allocated buffer length */
-        ws_pkt.payload = buf;
-        
-        /* Receive the frame data */
-        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
-            free(buf);
-            return ret;
-        }
-        
-        ESP_LOGI(TAG, "Received packet with message: %s", ws_pkt.payload);
-        
-        /* Echo the received message back to the client */
-        ret = httpd_ws_send_frame(req, &ws_pkt);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
-        }
-        
-        free(buf);
-    }
-
+    // esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    // if (ret != ESP_OK) {
+    //     ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+    //     return ret;
+    // }
+    
+    // ESP_LOGI(TAG, "Received frame: type=%d, len=%d", ws_pkt.type, ws_pkt.len);
     return ESP_OK;
 }
 
@@ -105,8 +75,7 @@ static const httpd_uri_t ws = {
     .method     = HTTP_GET,
     .handler    = ws_handler,
     .user_ctx   = NULL,
-    .is_websocket = true,
-    .handle_ws_control_frames = true
+    .is_websocket = true
 };
 
 static httpd_handle_t start_websocket(void)
@@ -159,23 +128,60 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
 static void ws_tx_task(void *pvParameters)
 {
     static camera_fb_t* im;
+    uint8_t *data_ptr;
+    size_t remaining_len;
+
     // xEventGroupSetBits(startUpEventGroup, START_UP_TX_TASK);
     while (1) {
-        if (server) { // ensure this task only runs when we have a connection            
+        if (server && ws_client_fd != -1) { // ensure this task only runs when we have a connection            
             xQueueReceive(wsTxQueue, &im, portMAX_DELAY);
 
-            httpd_ws_frame_t ws_pkt;
-            ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-            ws_pkt.len = im->len;
-            ws_pkt.payload = im->buf;
-
-            esp_err_t ret = httpd_ws_send_frame_async(server, ws_client_fd, &ws_pkt);
-            if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send image: %d", ret);
+            data_ptr = im->buf;
+            remaining_len = im->len;
+            bool is_first = true;
+            
+            while (remaining_len > 0) {
+                httpd_ws_frame_t ws_pkt = {0};
+                
+                // Set the size of this chunk
+                size_t current_chunk = (remaining_len > CHUNK_SIZE) ? 
+                                      CHUNK_SIZE : remaining_len;
+                
+                // Set frame properties
+                ws_pkt.payload = data_ptr;
+                ws_pkt.len = current_chunk;
+                ws_pkt.fragmented = (im->len > CHUNK_SIZE);  // Is message fragmented at all?
+                ws_pkt.final = (remaining_len <= CHUNK_SIZE); // Is this the last piece?
+                
+                // Set proper type for fragment position
+                if (is_first) {
+                    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+                    is_first = false;
+                } else {
+                    ws_pkt.type = HTTPD_WS_TYPE_CONTINUE;
+                }
+                
+                // Send the frame
+                esp_err_t ret = httpd_ws_send_frame_async(server, ws_client_fd, &ws_pkt);
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to send image chunk: %d", ret);
+                    break;
+                }
+                
+                // Move to next chunk
+                data_ptr += current_chunk;
+                remaining_len -= current_chunk;
+                
+                // Small delay to prevent TCP buffer overflow
+                if (remaining_len > 0) {
+                    vTaskDelay(pdMS_TO_TICKS(1));
+                }
             }
 
             esp_camera_fb_return(im);
         }
+        
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
