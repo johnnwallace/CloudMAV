@@ -125,11 +125,41 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+static void handleConnectionFailure()
+{
+    xSemaphoreTake(ws_client_lock, portMAX_DELAY);
+    if (ws_client_fd != -1) {
+        ws_client_fd = -1;
+        disconnect_handler(NULL, NULL, 0, NULL);
+    }
+    xSemaphoreGive(ws_client_lock);
+    
+    xEventGroupClearBits(wsConnectionEventGroup, WS_CONNECTION_ACTIVE);
+}
+
+static void handleTemporaryError()
+{
+    static int error_count = 0;
+    ESP_LOGI(TAG, "Handling temporary error");
+    
+    // Implement exponential backoff
+    error_count++;
+    if (error_count > 5) {
+        // Too many errors, treat as connection failure
+        handleConnectionFailure();
+        error_count = 0;
+    } else {
+        // Exponential backoff - pause before next frame
+        vTaskDelay(pdMS_TO_TICKS(50 * (1 << error_count)));
+    }
+}
+
 static void ws_tx_task(void *pvParameters)
 {
     static camera_fb_t* im;
     uint8_t *data_ptr;
     size_t remaining_len;
+    size_t chunk_idx;
 
     // xEventGroupSetBits(startUpEventGroup, START_UP_TX_TASK);
     while (1) {
@@ -139,8 +169,9 @@ static void ws_tx_task(void *pvParameters)
             data_ptr = im->buf;
             remaining_len = im->len;
             bool is_first = true;
+            chunk_idx = 0;
             
-            while (remaining_len > 0) {
+            while (remaining_len > 0 && server && ws_client_fd != -1) {
                 httpd_ws_frame_t ws_pkt = {0};
                 
                 // Set the size of this chunk
@@ -162,15 +193,26 @@ static void ws_tx_task(void *pvParameters)
                 }
                 
                 // Send the frame
+                ESP_LOGI(TAG, "Sending image chunk: %d", chunk_idx);
                 esp_err_t ret = httpd_ws_send_frame_async(server, ws_client_fd, &ws_pkt);
                 if (ret != ESP_OK) {
                     ESP_LOGE(TAG, "Failed to send image chunk: %d", ret);
-                    break;
+                    esp_camera_fb_return(im);
+
+                    // Connection-related errors
+                    if (ret == HTTPD_SOCK_ERR_TIMEOUT || ret == HTTPD_SOCK_ERR_INVALID || ret == -1) {
+                        // Handle as connection failure
+                        handleConnectionFailure();
+                    } else {
+                        // Handle as temporary transmission error
+                        handleTemporaryError();
+                    }
                 }
                 
                 // Move to next chunk
                 data_ptr += current_chunk;
                 remaining_len -= current_chunk;
+                chunk_idx++;
                 
                 // Small delay to prevent TCP buffer overflow
                 if (remaining_len > 0) {
