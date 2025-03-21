@@ -17,6 +17,11 @@
 #include "esp_crc.h"
 #include "esp_heap_caps.h"
 
+#include "lwip/err.h"
+#include "lwip/sys.h"
+#include "lwip/sockets.h"
+#include "lwip/netdb.h"
+
 #include <esp_http_server.h>
 
 static const char *TAG = "WEBSOCKET";
@@ -50,6 +55,13 @@ static esp_err_t ws_handler(httpd_req_t *req)
         // Store the new client fd
         ws_client_fd = fd;
         ESP_LOGI(TAG, "Handshake done, new connection established (fd=%d)", ws_client_fd);
+
+        int flag = 1;
+        esp_err_t ret = setsockopt(ws_client_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
+        if (ret != 0) {
+            ESP_LOGE(TAG, "Failed to set TCP_NODELAY: %d", ret);
+        }
+
         xSemaphoreGive(ws_client_lock);
 
         xEventGroupSetBits(wsConnectionEventGroup, WS_CONNECTION_ACTIVE);
@@ -89,6 +101,7 @@ static httpd_handle_t start_websocket(void)
         // Registering the ws handler
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &ws);
+
         return server;
     }
 
@@ -216,7 +229,7 @@ static void ws_tx_task(void *pvParameters)
                 
                 // Small delay to prevent TCP buffer overflow
                 if (remaining_len > 0) {
-                    vTaskDelay(pdMS_TO_TICKS(15));
+                    vTaskDelay(pdMS_TO_TICKS(100));
                 }
             }
 

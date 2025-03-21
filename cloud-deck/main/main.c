@@ -37,6 +37,7 @@ void app_main(void)
     esp_log_level_set("camera", ESP_LOG_INFO);
     esp_log_level_set("cam_hal", ESP_LOG_INFO);
     esp_log_level_set("WEBSOCKET", ESP_LOG_INFO);
+    // esp_log_level_set("lwip", ESP_LOG_DEBUG);
 
     ESP_LOGI("SYS", "\n\n -- Starting up --\n");
 

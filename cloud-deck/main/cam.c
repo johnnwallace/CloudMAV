@@ -47,7 +47,7 @@ static camera_config_t camera_config = {
 
     .pixel_format = PIXFORMAT_JPEG,//YUV422,GRAYSCALE,RGB565,JPEG
     // .frame_size = FRAMESIZE_SVGA,//QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
-    .frame_size = FRAMESIZE_VGA,
+    .frame_size = FRAMESIZE_SVGA,
 
     .jpeg_quality = CONFIG_JPEG_QUALITY, //0-63, for OV series camera sensors, lower number means higher quality
     .fb_count = CAMERA_QUEUE_LENGTH, //When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
