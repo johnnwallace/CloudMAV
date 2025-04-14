@@ -1,1 +1,1 @@
-This code is associated with my Princeton University undergraduate senior thesis entitled "CloudMAV: Unlocking Range and Compute with Wifi Connectivity in Micro Aerial Vehicles".
+This code is associated with my Princeton University undergraduate senior thesis entitled "CloudMAV: Unlocking Range and Compute with Wifi Connectivity in Micro Aerial Vehicles". Much of it is adapted from the [Bitcraze AI Deck firmware](https://github.com/bitcraze/aideck-esp-firmware/tree/main/main).
