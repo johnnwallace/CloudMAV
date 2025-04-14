@@ -1,0 +1,6 @@
+.DS_Store
+.vscode
+scripts/__pycache__
+client/__pycache__
+cache
+cloud-deck/certificates
